@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "carsten.omacheck",
+  "name": "OmaCheck",
+  "version": "1.0.0",
+  "author": "Carsten",
+  "description": "Universelle Notizen- & To-Do-App mit permanentem Desktop-Widget, Bar-Widget und Obsidian-Support.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "OmaCheck",
+    "description": "Notizen- und Aufgaben-Checkliste in der Leiste",
+    "category": "Productivity",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
