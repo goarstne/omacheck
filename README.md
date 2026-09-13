@@ -5,6 +5,26 @@
 Built on the **Ponytail principle** (*lazy senior dev: "The best code is the code never written"*):
 plain Markdown as the single source of truth, no external database, no custom sync daemon, full use of the Omarchy Linux ecosystem (Hyprland + Quickshell), with optional Obsidian vault compatibility.
 
+<p align="center">
+  <img src="screenshots/app-tasks.png" alt="OmaCheck app window with categories, search, and checkboxes" width="100%">
+</p>
+
+---
+
+## 🎨 Theme-aware & 📓 Obsidian-optional
+
+- **100% theme-aware:** every surface — desktop widget, bar widget, and app — reads the active Omarchy theme (`qs.Commons.Color` / `colors.toml`) live. Switch your Omarchy theme and OmaCheck follows, no restart:
+
+  <p align="center">
+    <img src="screenshots/theme-comparison.png" alt="Same OmaCheck view under two different Omarchy themes" width="100%">
+  </p>
+
+- **Storage: standalone by default, Obsidian optional.** Notes are plain Markdown under `~/Documents/OmaCheck` out of the box — no other app required. Flip a switch in Settings to store them in a `Notes/` subfolder of your currently open Obsidian vault instead; OmaCheck auto-detects it from `~/.config/obsidian/obsidian.json`. Every note exists 1:1 in Obsidian either way.
+
+  <p align="center">
+    <img src="screenshots/settings-obsidian.png" alt="OmaCheck Settings panel with the Obsidian vault storage option" width="100%">
+  </p>
+
 ---
 
 ## Components
