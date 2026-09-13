@@ -41,7 +41,8 @@ Rectangle {
     var parts = []
     if (task.priority) parts.push("Priority: " + task.priority)
     if (task.due_date) parts.push("📅 " + task.due_date)
-    if (task.note_title && root.selectedCategory === root.allCategory) parts.push(task.note_title)
+    if (task.note_title && root.selectedCategory === root.allCategory)
+      parts.push("📁 " + (task.category ? task.category + "/" : "") + task.note_title)
     return parts.join(" · ")
   }
 
@@ -65,6 +66,12 @@ Rectangle {
     if (toggleProc.running) return
     toggleProc.command = [binPath, "toggle", taskId]
     toggleProc.running = true
+  }
+
+  function deleteTask(taskId) {
+    if (deleteProc.running) return
+    deleteProc.command = [binPath, "delete", taskId]
+    deleteProc.running = true
   }
 
   function addTask(text) {
@@ -131,6 +138,15 @@ Rectangle {
     stderr: StdioCollector { id: toggleError }
     onExited: function(c) {
       root.errorText = c === 0 ? "" : (toggleError.text.trim() || "Could not update task.")
+      root.refresh()
+    }
+  }
+
+  Process {
+    id: deleteProc
+    stderr: StdioCollector { id: deleteError }
+    onExited: function(c) {
+      root.errorText = c === 0 ? "" : (deleteError.text.trim() || "Could not delete task.")
       root.refresh()
     }
   }
@@ -313,106 +329,132 @@ Rectangle {
 
         Repeater {
           model: root.filterTasks()
-          delegate: Controls.CheckBox {
-            id: taskCheck
+          delegate: Item {
+            id: taskRow
             required property var modelData
             width: parent.width
+            implicitHeight: taskCheck.implicitHeight
 
-            checked: Boolean(taskCheck.modelData && taskCheck.modelData.completed)
-            nextCheckState: function() { return checkState }
-            hoverEnabled: true
-            activeFocusOnTab: true
+            Controls.CheckBox {
+              id: taskCheck
+              readonly property var modelData: taskRow.modelData
+              anchors.left: parent.left
+              anchors.right: deleteBtn.left
+              anchors.rightMargin: Style.space(2)
 
-            spacing: Style.space(8)
-            leftPadding: Style.space(6)
-            rightPadding: Style.space(6)
-            topPadding: Style.space(3)
-            bottomPadding: Style.space(3)
+              checked: Boolean(taskCheck.modelData && taskCheck.modelData.completed)
+              nextCheckState: function() { return checkState }
+              hoverEnabled: true
+              activeFocusOnTab: true
 
-            Accessible.role: Accessible.CheckBox
-            Accessible.name: taskCheck.modelData.text
-            Accessible.checked: taskCheck.checked
-            Accessible.onToggleAction: root.toggleTask(taskCheck.modelData.id)
+              spacing: Style.space(8)
+              leftPadding: Style.space(6)
+              rightPadding: Style.space(6)
+              topPadding: Style.space(3)
+              bottomPadding: Style.space(3)
 
-            onClicked: root.toggleTask(taskCheck.modelData.id)
+              Accessible.role: Accessible.CheckBox
+              Accessible.name: taskCheck.modelData.text
+              Accessible.checked: taskCheck.checked
+              Accessible.onToggleAction: root.toggleTask(taskCheck.modelData.id)
 
-            indicator: Rectangle {
-              id: ind
-              implicitWidth: Style.space(16)
-              implicitHeight: Style.space(16)
-              width: implicitWidth
-              height: implicitHeight
-              x: taskCheck.leftPadding
-              y: taskCheck.topPadding + Math.max(0, Math.round((taskTitle.font.pixelSize * 1.3 - height) / 2))
-              radius: Math.max(2, Math.round(Style.cornerRadius / 4))
+              onClicked: root.toggleTask(taskCheck.modelData.id)
 
-              color: taskCheck.checked
-                ? Style.selectedFillFor(Color.foreground, Color.accent)
-                : (taskCheck.down ? Style.pressedFillFor(Color.foreground, Color.accent) : "transparent")
+              indicator: Rectangle {
+                id: ind
+                implicitWidth: Style.space(16)
+                implicitHeight: Style.space(16)
+                width: implicitWidth
+                height: implicitHeight
+                x: taskCheck.leftPadding
+                y: taskCheck.topPadding + Math.max(0, Math.round((taskTitle.font.pixelSize * 1.3 - height) / 2))
+                radius: Math.max(2, Math.round(Style.cornerRadius / 4))
 
-              border.width: 1
-              border.color: taskCheck.checked
-                ? Color.accent
-                : (taskCheck.hovered || taskCheck.activeFocus ? Color.accent : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.35))
+                color: taskCheck.checked
+                  ? Style.selectedFillFor(Color.foreground, Color.accent)
+                  : (taskCheck.down ? Style.pressedFillFor(Color.foreground, Color.accent) : "transparent")
 
-              Text {
-                anchors.centerIn: parent
-                visible: taskCheck.checked
-                text: "✓"
-                color: Color.accent
-                font.family: root.typography.family
-                font.pixelSize: Math.round(ind.height * 0.85)
-                font.bold: true
+                border.width: 1
+                border.color: taskCheck.checked
+                  ? Color.accent
+                  : (taskCheck.hovered || taskCheck.activeFocus ? Color.accent : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.35))
+
+                Text {
+                  anchors.centerIn: parent
+                  visible: taskCheck.checked
+                  text: "✓"
+                  color: Color.accent
+                  font.family: root.typography.family
+                  font.pixelSize: Math.round(ind.height * 0.85)
+                  font.bold: true
+                }
+              }
+
+              contentItem: Controls.Control {
+                leftPadding: taskCheck.indicator.width + taskCheck.spacing
+                topPadding: 0
+                bottomPadding: 0
+                rightPadding: 0
+                implicitHeight: taskCol.implicitHeight
+
+                contentItem: Column {
+                  id: taskCol
+                  spacing: Style.spacing.xxs
+
+                  Text {
+                    id: taskTitle
+                    textFormat: Text.PlainText
+                    width: taskCheck.availableWidth - taskCheck.indicator.width - taskCheck.spacing
+                    text: taskCheck.modelData.text
+                    font.family: root.typography.family
+                    font.pixelSize: Style.font.body
+                    color: taskCheck.checked ? Color.muted : Color.foreground
+                    font.strikeout: taskCheck.checked
+                    wrapMode: Text.Wrap
+                  }
+
+                  Text {
+                    id: taskMeta
+                    textFormat: Text.PlainText
+                    readonly property string metaString: root.formatTaskMetadata(taskCheck.modelData)
+                    visible: metaString.length > 0
+                    text: metaString
+                    font.family: root.typography.family
+                    font.pixelSize: Style.font.caption
+                    color: Color.muted
+                    elide: Text.ElideRight
+                    width: taskTitle.width
+                  }
+                }
+              }
+
+              background: Rectangle {
+                radius: Math.max(2, Math.round(Style.cornerRadius / 2))
+                color: taskCheck.down
+                  ? Style.pressedFillFor(Color.foreground, Color.accent)
+                  : (taskCheck.hovered || taskCheck.activeFocus
+                      ? Style.hoverFillFor(Color.foreground, Color.accent)
+                      : "transparent")
+                border.width: taskCheck.activeFocus ? 1 : 0
+                border.color: taskCheck.activeFocus ? Style.focusBorderColor : "transparent"
               }
             }
 
-            contentItem: Controls.Control {
-              leftPadding: taskCheck.indicator.width + taskCheck.spacing
-              topPadding: 0
-              bottomPadding: 0
-              rightPadding: 0
-              implicitHeight: taskCol.implicitHeight
-
-              contentItem: Column {
-                id: taskCol
-                spacing: Style.spacing.xxs
-
-                Text {
-                  id: taskTitle
-                  textFormat: Text.PlainText
-                  width: taskCheck.availableWidth - taskCheck.indicator.width - taskCheck.spacing
-                  text: taskCheck.modelData.text
-                  font.family: root.typography.family
-                  font.pixelSize: Style.font.body
-                  color: taskCheck.checked ? Color.muted : Color.foreground
-                  font.strikeout: taskCheck.checked
-                  wrapMode: Text.Wrap
-                }
-
-                Text {
-                  id: taskMeta
-                  textFormat: Text.PlainText
-                  readonly property string metaString: root.formatTaskMetadata(taskCheck.modelData)
-                  visible: metaString.length > 0
-                  text: metaString
-                  font.family: root.typography.family
-                  font.pixelSize: Style.font.caption
-                  color: Color.muted
-                  elide: Text.ElideRight
-                  width: taskTitle.width
-                }
-              }
-            }
-
-            background: Rectangle {
-              radius: Math.max(2, Math.round(Style.cornerRadius / 2))
-              color: taskCheck.down
-                ? Style.pressedFillFor(Color.foreground, Color.accent)
-                : (taskCheck.hovered || taskCheck.activeFocus
-                    ? Style.hoverFillFor(Color.foreground, Color.accent)
-                    : "transparent")
-              border.width: taskCheck.activeFocus ? 1 : 0
-              border.color: taskCheck.activeFocus ? Style.focusBorderColor : "transparent"
+            Ui.Button {
+              id: deleteBtn
+              focusable: true
+              anchors.right: parent.right
+              anchors.top: parent.top
+              anchors.topMargin: taskCheck.topPadding
+              implicitWidth: Style.space(18)
+              implicitHeight: Style.space(18)
+              horizontalPadding: 0
+              verticalPadding: 0
+              text: "−"
+              fontSize: Style.font.caption
+              tooltipText: "Delete task"
+              Accessible.name: "Delete task"
+              onClicked: root.deleteTask(taskRow.modelData.id)
             }
           }
         }

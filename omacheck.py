@@ -426,6 +426,43 @@ def toggle_task(
         return False, f"Error updating task: {err}"
 
 
+def delete_task(file_path: Path, line_number: int) -> Tuple[bool, str]:
+    """Deletes a checkbox line atomically and thread-safely via POSIX flock."""
+    if not file_path.is_file():
+        return False, f"File not found: {file_path}"
+
+    try:
+        with open(file_path, "r+", encoding="utf-8") as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                lines = f.readlines()
+                if line_number < 1 or line_number > len(lines):
+                    return False, f"Invalid line number: {line_number}"
+
+                target_line = lines[line_number - 1]
+                if not CHECKBOX_PATTERN.match(target_line):
+                    return False, f"Line {line_number} does not contain a checkbox"
+
+                del lines[line_number - 1]
+
+                temp_fd, temp_path = tempfile.mkstemp(
+                    dir=file_path.parent,
+                    prefix=".omacheck_tmp_",
+                    text=True,
+                )
+                with os.fdopen(temp_fd, "w", encoding="utf-8") as tf:
+                    tf.writelines(lines)
+                    tf.flush()
+                    os.fsync(tf.fileno())
+
+                os.replace(temp_path, file_path)
+                return True, "Task deleted"
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+    except Exception as err:
+        return False, f"Error deleting task: {err}"
+
+
 def add_task(
     notes_dir: Path,
     text: str,
@@ -778,37 +815,28 @@ def cmd_tasks(args: argparse.Namespace, config: Dict[str, Any]) -> int:
     return 0
 
 
+def _resolve_task_target(task_id: str, notes: List[Note]) -> Tuple[Optional[Path], Optional[int]]:
+    """Resolves a task_id to (file_path, line_number) via scanned notes, or via
+    a raw 'path:line' fallback (e.g. for a task in a file outside notes_dir).
+    Returns (None, None) if neither resolves."""
+    for n in notes:
+        for t in n.tasks:
+            if t.id == task_id:
+                return Path(t.file_path), t.line_number
+    if ":" in task_id:
+        path_str, line_str = task_id.rsplit(":", 1)
+        p = Path(path_str)
+        if p.is_file() and line_str.isdigit():
+            return p, int(line_str)
+    return None, None
+
+
 def cmd_toggle(args: argparse.Namespace, config: Dict[str, Any]) -> int:
     notes_dir, _ = resolve_notes_directory(config)
     notes = scan_notes(notes_dir, config["categories"]["default_category"])
 
-    # Look up the task by ID
-    matched_task: Optional[Task] = None
-    for n in notes:
-        for t in n.tasks:
-            if t.id == args.task_id:
-                matched_task = t
-                break
-        if matched_task:
-            break
-
-    if not matched_task:
-        # Check whether task_id was given as 'path:line'
-        if ":" in args.task_id:
-            path_str, line_str = args.task_id.rsplit(":", 1)
-            p = Path(path_str)
-            if p.is_file() and line_str.isdigit():
-                ok, msg = toggle_task(
-                    p,
-                    int(line_str),
-                    config["tasks"]["append_completion_date"],
-                )
-                if args.json:
-                    print(json.dumps({"success": ok, "message": msg}))
-                else:
-                    print(msg)
-                return 0 if ok else 1
-
+    file_path, line_number = _resolve_task_target(args.task_id, notes)
+    if file_path is None:
         msg = f"Task with ID '{args.task_id}' not found."
         if args.json:
             print(json.dumps({"success": False, "message": msg}))
@@ -816,13 +844,30 @@ def cmd_toggle(args: argparse.Namespace, config: Dict[str, Any]) -> int:
             sys.stderr.write(f"Error: {msg}\n")
         return 1
 
-    ok, msg = toggle_task(
-        Path(matched_task.file_path),
-        matched_task.line_number,
-        config["tasks"]["append_completion_date"],
-    )
+    ok, msg = toggle_task(file_path, line_number, config["tasks"]["append_completion_date"])
     if args.json:
-        print(json.dumps({"success": ok, "message": msg, "task_id": matched_task.id}))
+        print(json.dumps({"success": ok, "message": msg, "task_id": args.task_id}))
+    else:
+        print(msg)
+    return 0 if ok else 1
+
+
+def cmd_delete(args: argparse.Namespace, config: Dict[str, Any]) -> int:
+    notes_dir, _ = resolve_notes_directory(config)
+    notes = scan_notes(notes_dir, config["categories"]["default_category"])
+
+    file_path, line_number = _resolve_task_target(args.task_id, notes)
+    if file_path is None:
+        msg = f"Task with ID '{args.task_id}' not found."
+        if args.json:
+            print(json.dumps({"success": False, "message": msg}))
+        else:
+            sys.stderr.write(f"Error: {msg}\n")
+        return 1
+
+    ok, msg = delete_task(file_path, line_number)
+    if args.json:
+        print(json.dumps({"success": ok, "message": msg, "task_id": args.task_id}))
     else:
         print(msg)
     return 0 if ok else 1
@@ -1065,6 +1110,11 @@ def main() -> int:
     p_toggle = subparsers.add_parser("toggle", parents=[common_parser], help="Toggles a checkbox (- [ ] <-> - [x])")
     p_toggle.add_argument("task_id", help="Task ID (e.g. sprint:8 or file.md:8)")
     p_toggle.set_defaults(func=cmd_toggle)
+
+    # delete
+    p_delete = subparsers.add_parser("delete", parents=[common_parser], help="Deletes a checkbox task")
+    p_delete.add_argument("task_id", help="Task ID (e.g. sprint:8 or file.md:8)")
+    p_delete.set_defaults(func=cmd_delete)
 
     # add
     p_add = subparsers.add_parser("add", parents=[common_parser], help="Adds a new checkbox task")

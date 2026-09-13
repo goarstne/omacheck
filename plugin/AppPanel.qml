@@ -145,6 +145,12 @@ Item {
     toggleProc.running = true
   }
 
+  function deleteTask(taskId) {
+    if (deleteProc.running) return
+    deleteProc.command = [binPath, "delete", taskId]
+    deleteProc.running = true
+  }
+
   function addTask(text, priority) {
     var trimmed = (text || "").trim()
     if (!trimmed || addProc.running) return
@@ -346,6 +352,7 @@ Item {
   }
 
   Process { id: toggleProc; onExited: function(c) { root.refresh() } }
+  Process { id: deleteProc; onExited: function(c) { root.refresh() } }
   Process {
     id: addProc
     onExited: function(c) {
@@ -961,15 +968,38 @@ Item {
 
                   Repeater {
                     model: root.filteredTasks()
-                    delegate: Choice {
-                      id: taskToggle
+                    delegate: Item {
+                      id: taskRow
                       required property var modelData
                       width: parent.width
-                      strikeoutOnChecked: true
-                      label: taskToggle.modelData.text
-                      description: root.formatTaskMetadata(taskToggle.modelData)
-                      checked: Boolean(taskToggle.modelData && taskToggle.modelData.completed)
-                      onClicked: root.toggleTask(taskToggle.modelData.id)
+                      implicitHeight: taskToggle.implicitHeight
+
+                      Choice {
+                        id: taskToggle
+                        readonly property var modelData: taskRow.modelData
+                        anchors.left: parent.left
+                        anchors.right: deleteBtn.left
+                        anchors.rightMargin: Style.space(4)
+                        strikeoutOnChecked: true
+                        label: taskToggle.modelData.text
+                        description: root.formatTaskMetadata(taskToggle.modelData)
+                        checked: Boolean(taskToggle.modelData && taskToggle.modelData.completed)
+                        onClicked: root.toggleTask(taskToggle.modelData.id)
+                      }
+
+                      Action {
+                        id: deleteBtn
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        implicitWidth: Style.space(22)
+                        implicitHeight: Style.space(22)
+                        horizontalPadding: 0
+                        verticalPadding: 0
+                        text: "−"
+                        tooltipText: "Delete task"
+                        Accessible.name: "Delete task"
+                        onClicked: root.deleteTask(taskRow.modelData.id)
+                      }
                     }
                   }
 

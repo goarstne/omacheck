@@ -30,16 +30,18 @@ with tempfile.TemporaryDirectory(prefix="omacheck-ui-") as directory:
     source = (PROJECT / "plugin/DesktopWidgetView.qml").read_text()
     source = source.replace("import QtQuick\n", "import QtQuick\nimport QtTest\n", 1)
     source = source.replace('id: taskCheck\n', 'id: taskCheck\n            objectName: "task-" + modelData.text\n')
+    source = source.replace('id: deleteBtn\n', 'id: deleteBtn\n              objectName: "delete-" + taskRow.modelData.text\n')
     checks = '''
     TestCase {
       name: "Desktop"; when: true
-      function findTask(item) {
-        if (item.objectName === "task-Test task") return item
+      function findByName(item, name) {
+        if (item.objectName === name) return item
         for (var i = 0; i < item.children.length; i++) {
-          var found = findTask(item.children[i]); if (found) return found
+          var found = findByName(item.children[i], name); if (found) return found
         }
         return null
       }
+      function findTask(item) { return findByName(item, "task-Test task") }
       function test_interaction() {
         tryVerify(function() { return root.tasksList.length === 2 && !root.loading }, 3000)
         var task = findTask(root)
@@ -54,6 +56,14 @@ with tempfile.TemporaryDirectory(prefix="omacheck-ui-") as directory:
         taskInputField.text = "New task"; taskInputField.accepted()
         tryVerify(function() { return root.tasksList.length === 3 && !root.loading }, 3000)
         compare(taskInputField.text, ""); compare(root.errorText, "")
+
+        var deleteBtn = findByName(root, "delete-New task")
+        verify(deleteBtn !== null)
+        deleteBtn.forceActiveFocus()
+        keyClick(Qt.Key_Space)
+        tryVerify(function() { return root.tasksList.length === 2 && !root.loading }, 3000)
+        verify(findByName(root, "task-New task") === null)
+
         console.log("DESKTOP_UI_OK"); finishTimer.start()
       }
     }

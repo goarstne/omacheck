@@ -19,6 +19,7 @@ from omacheck import (
     add_task,
     apply_bar_widget_setting,
     create_note,
+    delete_task,
     detect_obsidian_vault,
     extract_frontmatter_category,
     load_config,
@@ -179,6 +180,25 @@ class TestOmaCheckAtomicToggleAndAdd(unittest.TestCase):
 
         self.assertTrue(lines[4].startswith("- [ ] Task 2"))
         self.assertNotIn("✅", lines[4])
+
+    def test_delete_removes_only_the_targeted_line(self):
+        # Zeile 5 ist Task 2, Zeile 6 ist Task 3.
+        ok, msg = delete_task(self.note_file, 5)
+        self.assertTrue(ok)
+
+        with open(self.note_file, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        self.assertEqual(len(lines), 5)
+        self.assertTrue(lines[3].startswith("- [ ] Task 1"))
+        self.assertTrue(lines[4].startswith("- [ ] Task 3"))
+        self.assertNotIn("Task 2", "".join(lines))
+
+    def test_delete_rejects_non_checkbox_line(self):
+        ok, msg = delete_task(self.note_file, 1)  # "# Aufgaben"
+        self.assertFalse(ok)
+        with open(self.note_file, "r", encoding="utf-8") as f:
+            self.assertEqual(len(f.readlines()), 6)
 
     def test_add_task_to_existing_note(self):
         ok, msg = add_task(
