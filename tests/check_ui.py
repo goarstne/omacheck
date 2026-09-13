@@ -27,7 +27,8 @@ with tempfile.TemporaryDirectory(prefix="omacheck-ui-") as directory:
     shell = Path(os.environ.get("OMARCHY_PATH", "/usr/share/omarchy")) / "shell"
     for module in ("Commons", "Ui"):
         (root / module).symlink_to(shell / module, target_is_directory=True)
-    source = (PROJECT / "plugin/DesktopWidgetView.qml").read_text()
+    source_path = PROJECT / "DesktopWidgetView.qml" if (PROJECT / "DesktopWidgetView.qml").exists() else PROJECT / "plugin/DesktopWidgetView.qml"
+    source = source_path.read_text()
     source = source.replace("import QtQuick\n", "import QtQuick\nimport QtTest\n", 1)
     source = source.replace('id: taskCheck\n', 'id: taskCheck\n            objectName: "task-" + modelData.text\n')
     source = source.replace('id: deleteBtn\n', 'id: deleteBtn\n              objectName: "delete-" + taskRow.modelData.text\n')

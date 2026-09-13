@@ -253,16 +253,17 @@ omacheck/
 ├── SPEC.md                    # This specification
 ├── README.md                  # Quickstart & documentation
 ├── omacheck.py                # Core engine & CLI (Python 3 stdlib)
-├── install.py                 # Install script (CLI + plugin + Hyprland)
-├── tests/
-│   ├── test_omacheck.py       # Unit tests for the core engine
-│   └── check_ui.py            # Quickshell/QtTest smoke check for the desktop widget
-└── plugin/                    # Quickshell plugin (carsten.omacheck)
-    ├── manifest.json          # Plugin metadata for omarchy-shell (kinds: service, bar-widget, panel)
-    ├── Service.qml            # Desktop-widget host (layer-shell window)
-    ├── DesktopWidgetView.qml  # Universal desktop widget with categories & checkboxes
-    ├── BarWidget.qml          # Bar icon with counter; opens the app via shell IPC
-    └── AppPanel.qml           # Native app window, loaded in-process as a `panel` plugin
+├── install.py                 # Install script (CLI + plugin + desktop entry)
+├── manifest.json              # Plugin metadata for omarchy-shell (kinds: service, bar-widget, panel)
+├── Service.qml                # Desktop-widget host (layer-shell window)
+├── DesktopWidgetView.qml      # Universal desktop widget with categories & checkboxes
+├── BarWidget.qml              # Bar icon with counter; opens the app via shell IPC
+├── AppPanel.qml               # Native app window, loaded in-process as a `panel` plugin
+├── preview.png                # Marketplace preview image
+└── tests/
+    ├── test_omacheck.py       # Unit tests for the core engine
+    ├── check_ui.py            # Quickshell/QtTest smoke check for the desktop widget
+    └── check_app_panel.py     # App panel open/close lifecycle and shell sync check
 ```
 
 The app window (`AppPanel.qml`) is a `panel`-kind entry point of this same

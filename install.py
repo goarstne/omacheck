@@ -60,14 +60,43 @@ def install_desktop_entry() -> bool:
     return True
 
 
+PLUGIN_FILES = [
+    "manifest.json",
+    "Service.qml",
+    "BarWidget.qml",
+    "AppPanel.qml",
+    "DesktopWidgetView.qml",
+]
+
+
+def uninstall() -> int:
+    print("-> Uninstalling OmaCheck...")
+    target_bin = LOCAL_BIN_DIR / "omacheck"
+    if target_bin.is_symlink() or target_bin.is_file():
+        target_bin.unlink()
+        print(f"✓ Removed: {target_bin}")
+
+    target_desktop = APPLICATIONS_DIR / "omacheck.desktop"
+    if target_desktop.is_file():
+        target_desktop.unlink()
+        print(f"✓ Removed: {target_desktop}")
+
+    if PLUGIN_TARGET_DIR.is_dir():
+        shutil.rmtree(PLUGIN_TARGET_DIR)
+        print(f"✓ Removed: {PLUGIN_TARGET_DIR}")
+
+    try:
+        subprocess.run(["omarchy-shell", "shell", "rescanPlugins"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+    print("✓ OmaCheck uninstalled successfully.")
+    return 0
+
+
 def install_plugin() -> bool:
     print("-> Installing Quickshell plugin (carsten.omacheck)...")
     PLUGIN_TARGET_DIR.mkdir(parents=True, exist_ok=True)
-
-    plugin_src = PROJECT_ROOT / "plugin"
-    if not plugin_src.is_dir():
-        print(f"Error: {plugin_src} does not exist.")
-        return False
 
     # Clean up any old links in the plugin folder
     for old_item in PLUGIN_TARGET_DIR.glob("*"):
@@ -76,16 +105,17 @@ def install_plugin() -> bool:
         elif old_item.is_dir():
             shutil.rmtree(old_item)
 
-    for item in plugin_src.glob("*"):
-        dest = PLUGIN_TARGET_DIR / item.name
+    for fname in PLUGIN_FILES:
+        src = PROJECT_ROOT / fname
+        if not src.is_file():
+            print(f"Error: {src} does not exist.")
+            return False
+        dest = PLUGIN_TARGET_DIR / fname
         try:
-            dest.symlink_to(item.resolve())
+            dest.symlink_to(src.resolve())
             print(f"✓ Plugin file linked: {dest.name}")
         except Exception:
-            if item.is_dir():
-                shutil.copytree(item, dest)
-            else:
-                shutil.copy2(item, dest)
+            shutil.copy2(src, dest)
             print(f"✓ Plugin file copied: {dest.name}")
 
     # Re-scan plugins in the Omarchy shell
@@ -127,6 +157,9 @@ def setup_example_notes() -> None:
 
 
 def main() -> int:
+    if "--uninstall" in sys.argv or "-u" in sys.argv:
+        return uninstall()
+
     print("=== OmaCheck setup for Omarchy Linux ===\n")
     if not install_cli():
         return 1

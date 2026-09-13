@@ -1110,7 +1110,7 @@ def launch_gui(config: Dict[str, Any]) -> int:
     """Opens the app window in the already-running omarchy-shell.
 
     The app is a `panel`-kind entry point of this same plugin
-    (plugin/AppPanel.qml), loaded in-process like every other Omarchy panel
+    (AppPanel.qml), loaded in-process like every other Omarchy panel
     (see omarchy.menu) — not a separate `quickshell -p` process. Toggling
     (rather than only summoning) matches the bar widget's own click
     behavior: open on the first call, close on the next.

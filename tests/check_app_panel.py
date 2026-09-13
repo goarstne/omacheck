@@ -30,7 +30,8 @@ with tempfile.TemporaryDirectory(prefix="omacheck-panel-") as directory:
     for module in ("Commons", "Ui"):
         (root / module).symlink_to(shell / module, target_is_directory=True)
 
-    source = (PROJECT / "plugin/AppPanel.qml").read_text()
+    source_path = PROJECT / "AppPanel.qml" if (PROJECT / "AppPanel.qml").exists() else PROJECT / "plugin/AppPanel.qml"
+    source = source_path.read_text()
     source = source.replace("import QtQuick\n", "import QtQuick\nimport QtTest\n", 1)
     checks = '''
     QtObject {

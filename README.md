@@ -56,17 +56,52 @@ plain Markdown as the single source of truth, no external database, no custom sy
 
 ## Install & setup
 
+### Via Omarchy Plugin Marketplace
+
+Install directly with the Omarchy plugin CLI:
+
+```bash
+omarchy plugin add https://github.com/goarstne/omacheck.git --enable
+```
+
+To also install the `omacheck` command line tool and desktop app launcher:
+
+```bash
+python3 ~/.config/omarchy/plugins/carsten.omacheck/install.py
+```
+
+### Manual installation from source
+
 ```bash
 git clone https://github.com/goarstne/omacheck.git
 cd omacheck
 python3 install.py
 ```
 
-The script:
+The install script:
 1. Creates the symlink `~/.local/bin/omacheck`.
 2. Installs the app launcher `~/.local/share/applications/omacheck.desktop`.
 3. Links the Quickshell plugin into `~/.config/omarchy/plugins/carsten.omacheck/`.
 4. Reloads the Omarchy shell plugins (`omarchy-shell shell rescanPlugins`).
+
+---
+
+## Removal / Uninstall
+
+To remove OmaCheck:
+
+```bash
+omarchy plugin remove carsten.omacheck
+# Or run the uninstaller from the repository:
+python3 install.py --uninstall
+```
+
+To manually remove all installed links and config:
+
+```bash
+rm -f ~/.local/bin/omacheck ~/.local/share/applications/omacheck.desktop
+rm -rf ~/.config/omarchy/plugins/carsten.omacheck
+```
 
 ---
 
