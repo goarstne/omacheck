@@ -77,6 +77,7 @@ Item {
   property string storageMode: storageStandalone
   property bool storageModeBusy: false
   property string storageModeStatusMessage: ""
+  property string categoryStatusMessage: ""
 
   readonly property bool obsidianActive: !!(root.rawData.mode && String(root.rawData.mode).indexOf(root.storageObsidian) === 0)
 
@@ -183,6 +184,13 @@ Item {
     root.selectedNote = null
     addCategoryProc.command = [binPath, "categories", "--add", trimmed, "--json"]
     addCategoryProc.running = true
+  }
+
+  function removeCategory(name) {
+    if (removeCategoryProc.running) return
+    root.categoryStatusMessage = ""
+    removeCategoryProc.command = [binPath, "categories", "--remove", name, "--json"]
+    removeCategoryProc.running = true
   }
 
   function openInObsidian() {
@@ -373,6 +381,24 @@ Item {
     onExited: function(c) {
       newCategoryInput.text = ""
       categoryDialog.visible = false
+      root.refresh()
+    }
+  }
+  Process {
+    id: removeCategoryProc
+    stdout: StdioCollector { id: removeCategoryStdout }
+    onExited: function(c) {
+      var raw = String(removeCategoryStdout.text || "").trim()
+      var parsed = null
+      if (raw.length > 0) {
+        try { parsed = JSON.parse(raw) } catch (e) { console.warn("OmaCheck remove category parse error:", e) }
+      }
+      if (!(parsed && parsed.success)) {
+        root.categoryStatusMessage = (parsed && parsed.message) || "Could not remove category"
+      } else if (root.selectedCategory !== root.allCategory && parsed.message && parsed.message.indexOf(root.selectedCategory) !== -1) {
+        root.selectedCategory = root.allCategory
+        root.selectedNote = null
+      }
       root.refresh()
     }
   }
@@ -801,14 +827,39 @@ Item {
 
                 Repeater {
                   model: root.categories
-                  delegate: Action {
+                  delegate: Item {
+                    id: catRow
                     required property string modelData
-                    text: modelData
-                    selected: root.selectedCategory === modelData
-                    onClicked: {
-                      root.selectedCategory = modelData
-                      root.selectedNote = null
-                      root.refresh()
+                    readonly property bool removable: modelData !== root.allCategory && modelData !== root.defaultCategory
+                    implicitWidth: catBtn.implicitWidth + (removable ? catRemove.implicitWidth + Style.space(2) : 0)
+                    implicitHeight: catBtn.implicitHeight
+
+                    Action {
+                      id: catBtn
+                      anchors.left: parent.left
+                      text: catRow.modelData
+                      selected: root.selectedCategory === catRow.modelData
+                      onClicked: {
+                        root.selectedCategory = catRow.modelData
+                        root.selectedNote = null
+                        root.refresh()
+                      }
+                    }
+
+                    Action {
+                      id: catRemove
+                      visible: catRow.removable
+                      anchors.left: catBtn.right
+                      anchors.leftMargin: Style.space(2)
+                      anchors.verticalCenter: catBtn.verticalCenter
+                      implicitWidth: Style.space(22)
+                      implicitHeight: Style.space(22)
+                      horizontalPadding: 0
+                      verticalPadding: 0
+                      text: "×"
+                      tooltipText: "Remove category (only if empty)"
+                      Accessible.name: "Remove category " + catRow.modelData
+                      onClicked: root.removeCategory(catRow.modelData)
                     }
                   }
                 }
@@ -827,6 +878,15 @@ Item {
                 }
               }
             }
+          }
+
+          Caption {
+            Layout.fillWidth: true
+            visible: root.categoryStatusMessage !== ""
+            text: root.categoryStatusMessage
+            color: Color.urgent
+            opacity: 0.85
+            font.pixelSize: Style.font.caption
           }
 
           // 3. Search and quick-add bar

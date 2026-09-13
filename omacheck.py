@@ -595,6 +595,44 @@ def add_category(name: str, config_path: Path) -> Tuple[bool, str]:
     return True, f"Category '{clean_name}' added"
 
 
+def remove_category(
+    name: str,
+    config_path: Path,
+    notes_dir: Path,
+    default_category: str = DEFAULT_CATEGORY,
+) -> Tuple[bool, str]:
+    """Un-pins a category. Refuses if real notes still live under it (folder-
+    based categories come back from the next scan regardless of the pin, so
+    silently "succeeding" there would just be confusing) or if it is the
+    reserved default/all-categories name."""
+    clean_name = name.strip()
+    if not clean_name:
+        return False, "Category name cannot be empty"
+    if clean_name in (default_category, ALL_CATEGORIES_LABEL):
+        return False, f"Cannot remove the '{clean_name}' category"
+
+    notes = scan_notes(notes_dir, default_category)
+    if any(n.category == clean_name for n in notes):
+        return False, f"Category '{clean_name}' still has notes; move or delete them first"
+
+    raw, err = _load_config_file_strict(config_path)
+    if raw is None:
+        return False, err
+
+    categories = raw.get("categories")
+    pinned = categories.get("pinned") if isinstance(categories, dict) else None
+    if not isinstance(pinned, list) or clean_name not in pinned:
+        return False, f"Category '{clean_name}' is not pinned"
+
+    categories["pinned"] = [c for c in pinned if c != clean_name]
+    raw["categories"] = categories
+
+    save_ok, save_msg = save_config(raw, config_path)
+    if not save_ok:
+        return False, save_msg
+    return True, f"Category '{clean_name}' removed"
+
+
 def _bar_entry_id(entry: Any) -> Any:
     return entry.get("id") if isinstance(entry, dict) else entry
 
@@ -921,6 +959,17 @@ def cmd_categories(args: argparse.Namespace, config: Dict[str, Any]) -> int:
             print(msg if ok else f"Error: {msg}", file=sys.stdout if ok else sys.stderr)
         return 0 if ok else 1
 
+    if args.remove:
+        notes_dir, _ = resolve_notes_directory(config)
+        ok, msg = remove_category(
+            args.remove, args.config, notes_dir, config["categories"]["default_category"]
+        )
+        if args.json:
+            print(json.dumps({"success": ok, "message": msg}))
+        else:
+            print(msg if ok else f"Error: {msg}", file=sys.stdout if ok else sys.stderr)
+        return 0 if ok else 1
+
     notes_dir, _ = resolve_notes_directory(config)
     notes = scan_notes(notes_dir, config["categories"]["default_category"])
 
@@ -1136,6 +1185,9 @@ def main() -> int:
     # categories
     p_cats = subparsers.add_parser("categories", parents=[common_parser], help="Lists all categories")
     p_cats.add_argument("--add", metavar="NAME", help="Pin a new category, even before it has a note")
+    p_cats.add_argument(
+        "--remove", metavar="NAME", help="Un-pin a category (fails if it still has notes)"
+    )
     p_cats.set_defaults(func=cmd_categories)
 
     # settings

@@ -25,6 +25,7 @@ from omacheck import (
     load_config,
     parse_task_line,
     read_bar_widget_live_state,
+    remove_category,
     resolve_notes_directory,
     save_config,
     scan_notes,
@@ -446,6 +447,47 @@ class TestOmaCheckCategoryPinning(unittest.TestCase):
         self.assertFalse(ok)
         with open(self.config_path, "r", encoding="utf-8") as f:
             self.assertEqual(f.read(), broken)
+
+    def test_remove_category_unpins_it(self):
+        notes_dir = self.test_dir / "notes"
+        notes_dir.mkdir()
+        add_category("Shopping", self.config_path)
+
+        ok, msg = remove_category("Shopping", self.config_path, notes_dir)
+        self.assertTrue(ok, msg)
+        with open(self.config_path, "r", encoding="utf-8") as f:
+            saved = json.load(f)
+        self.assertEqual(saved["categories"]["pinned"], [])
+
+    def test_remove_category_rejects_one_not_pinned(self):
+        notes_dir = self.test_dir / "notes"
+        notes_dir.mkdir()
+        ok, msg = remove_category("Ghost", self.config_path, notes_dir)
+        self.assertFalse(ok)
+        self.assertIn("not pinned", msg)
+
+    def test_remove_category_refuses_when_notes_still_exist(self):
+        notes_dir = self.test_dir / "notes"
+        work_dir = notes_dir / "Work"
+        work_dir.mkdir(parents=True)
+        with open(work_dir / "Note.md", "w", encoding="utf-8") as f:
+            f.write("# Note\n- [ ] Task\n")
+        add_category("Work", self.config_path)
+
+        ok, msg = remove_category("Work", self.config_path, notes_dir)
+        self.assertFalse(ok)
+        self.assertIn("still has notes", msg)
+        with open(self.config_path, "r", encoding="utf-8") as f:
+            saved = json.load(f)
+        self.assertEqual(saved["categories"]["pinned"], ["Work"])
+
+    def test_remove_category_rejects_reserved_names(self):
+        notes_dir = self.test_dir / "notes"
+        notes_dir.mkdir()
+        ok, _ = remove_category("General", self.config_path, notes_dir)
+        self.assertFalse(ok)
+        ok, _ = remove_category("All", self.config_path, notes_dir)
+        self.assertFalse(ok)
 
 
 class TestOmaCheckStrictConfigLoader(unittest.TestCase):

@@ -14,6 +14,7 @@ Rectangle {
   // 1. Constants & State Properties
   // =========================================================================
   readonly property string allCategory: "All"
+  readonly property string defaultCategory: "General"
   readonly property string binPath: Quickshell.env("HOME") + "/.local/bin/omacheck"
   readonly property var typography: Style.font
 
@@ -91,6 +92,12 @@ Rectangle {
     root.selectedCategory = trimmed
     addCategoryProc.command = [binPath, "categories", "--add", trimmed, "--json"]
     addCategoryProc.running = true
+  }
+
+  function removeCategory(name) {
+    if (removeCategoryProc.running) return
+    removeCategoryProc.command = [binPath, "categories", "--remove", name, "--json"]
+    removeCategoryProc.running = true
   }
 
   // =========================================================================
@@ -176,6 +183,27 @@ Rectangle {
     }
   }
 
+  Process {
+    id: removeCategoryProc
+    stdout: StdioCollector { id: removeCategoryStdout }
+    onExited: function(c) {
+      var raw = String(removeCategoryStdout.text || "").trim()
+      var parsed = null
+      if (raw.length > 0) {
+        try { parsed = JSON.parse(raw) } catch (e) { console.warn("OmaCheck remove category parse error:", e) }
+      }
+      if (!(parsed && parsed.success)) {
+        root.errorText = (parsed && parsed.message) || "Could not remove category."
+      } else {
+        root.errorText = ""
+        if (root.selectedCategory !== root.allCategory && parsed.message && parsed.message.indexOf(root.selectedCategory) !== -1) {
+          root.selectedCategory = root.allCategory
+        }
+      }
+      root.refresh()
+    }
+  }
+
   // =========================================================================
   // 4. UI Layout
   // =========================================================================
@@ -242,20 +270,46 @@ Rectangle {
 
           Repeater {
             model: root.categoriesList
-            delegate: Ui.Button {
+            delegate: Item {
+              id: catRow
               required property string modelData
-              text: modelData
-              selected: root.selectedCategory === modelData
-              horizontalPadding: Style.space(6)
-              verticalPadding: Style.space(3)
-              fontSize: Style.font.caption
-              focusable: true
-              Accessible.role: Accessible.Button
-              Accessible.name: text
-              Accessible.onPressAction: clicked()
-              onClicked: {
-                root.selectedCategory = modelData
-                root.refresh()
+              readonly property bool removable: modelData !== root.allCategory && modelData !== root.defaultCategory
+              implicitWidth: catBtn.implicitWidth + (removable ? catRemove.implicitWidth : 0)
+              implicitHeight: catBtn.implicitHeight
+
+              Ui.Button {
+                id: catBtn
+                anchors.left: parent.left
+                text: catRow.modelData
+                selected: root.selectedCategory === catRow.modelData
+                horizontalPadding: Style.space(6)
+                verticalPadding: Style.space(3)
+                fontSize: Style.font.caption
+                focusable: true
+                Accessible.role: Accessible.Button
+                Accessible.name: text
+                Accessible.onPressAction: clicked()
+                onClicked: {
+                  root.selectedCategory = catRow.modelData
+                  root.refresh()
+                }
+              }
+
+              Ui.Button {
+                id: catRemove
+                visible: catRow.removable
+                focusable: true
+                anchors.left: catBtn.right
+                anchors.verticalCenter: catBtn.verticalCenter
+                implicitWidth: Style.space(16)
+                implicitHeight: Style.space(16)
+                horizontalPadding: 0
+                verticalPadding: 0
+                text: "×"
+                fontSize: Style.font.caption
+                tooltipText: "Remove category (only if empty)"
+                Accessible.name: "Remove category " + catRow.modelData
+                onClicked: root.removeCategory(catRow.modelData)
               }
             }
           }

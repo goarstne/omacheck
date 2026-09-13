@@ -31,6 +31,7 @@ with tempfile.TemporaryDirectory(prefix="omacheck-ui-") as directory:
     source = source.replace("import QtQuick\n", "import QtQuick\nimport QtTest\n", 1)
     source = source.replace('id: taskCheck\n', 'id: taskCheck\n            objectName: "task-" + modelData.text\n')
     source = source.replace('id: deleteBtn\n', 'id: deleteBtn\n              objectName: "delete-" + taskRow.modelData.text\n')
+    source = source.replace('id: catRemove\n', 'id: catRemove\n                objectName: "catdelete-" + catRow.modelData\n')
     checks = '''
     TestCase {
       name: "Desktop"; when: true
@@ -63,6 +64,14 @@ with tempfile.TemporaryDirectory(prefix="omacheck-ui-") as directory:
         keyClick(Qt.Key_Space)
         tryVerify(function() { return root.tasksList.length === 2 && !root.loading }, 3000)
         verify(findByName(root, "task-New task") === null)
+
+        newCategoryField.text = "Temp"; newCategoryField.accepted()
+        tryVerify(function() { return root.categoriesList.indexOf("Temp") !== -1 && !root.loading }, 3000)
+        var catDelete = findByName(root, "catdelete-Temp")
+        verify(catDelete !== null)
+        catDelete.forceActiveFocus()
+        keyClick(Qt.Key_Space)
+        tryVerify(function() { return root.categoriesList.indexOf("Temp") === -1 && !root.loading }, 3000)
 
         console.log("DESKTOP_UI_OK"); finishTimer.start()
       }
