@@ -40,7 +40,8 @@ plain Markdown as the single source of truth, no external database, no custom sy
 ## Install & setup
 
 ```bash
-cd /home/carsten/Projects/omacheck
+git clone https://github.com/goarstne/omacheck.git
+cd omacheck
 python3 install.py
 ```
 
@@ -107,3 +108,9 @@ python3 tests/check_ui.py
 # App panel open/close lifecycle (host- vs. user-initiated close, shell.hide() sync)
 python3 tests/check_app_panel.py
 ```
+
+---
+
+## License
+
+MIT License. Copyright (c) 2026 Carsten.

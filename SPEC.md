@@ -194,7 +194,7 @@ omacheck open-obsidian [note name]     # Opens a note or the vault directly in O
     {
       "title": "Sprint-Planning",
       "category": "Work",
-      "path": "/home/carsten/Documents/OmaCheck/Work/Sprint-Planning.md",
+      "path": "/home/user/Documents/OmaCheck/Work/Sprint-Planning.md",
       "tasks": [
         {
           "id": "sprint:8",
@@ -249,7 +249,7 @@ omacheck open-obsidian [note name]     # Opens a note or the vault directly in O
 ## 8. Project file structure
 
 ```
-/home/carsten/Projects/omacheck/
+omacheck/
 ├── SPEC.md                    # This specification
 ├── README.md                  # Quickstart & documentation
 ├── omacheck.py                # Core engine & CLI (Python 3 stdlib)
