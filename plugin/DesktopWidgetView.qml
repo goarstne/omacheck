@@ -9,66 +9,53 @@ import qs.Ui as Ui
 
 Rectangle {
   id: root
+
+  // =========================================================================
+  // 1. Constants & State Properties
+  // =========================================================================
+  readonly property string allCategory: "All"
   readonly property string binPath: Quickshell.env("HOME") + "/.local/bin/omacheck"
   readonly property var typography: Style.font
 
   property var tasksList: []
-  property var categoriesList: ["Alle"]
-  property string selectedCategory: "Alle"
+  property var categoriesList: [allCategory]
+  property string selectedCategory: allCategory
   property int openCount: 0
   property bool loading: false
+  property string errorText: ""
+  property bool addingCategory: false
 
-  implicitWidth: Style.space(380)
-  implicitHeight: Style.space(520)
+  implicitWidth: Style.space(320)
+  implicitHeight: Style.space(400)
 
-  radius: Style.cornerRadius > 0 ? Style.cornerRadius : Style.space(12)
+  radius: Style.cornerRadius > 0 ? Style.cornerRadius : Style.space(10)
   color: Qt.rgba(Color.background.r, Color.background.g, Color.background.b, 0.90)
-  border.width: Style.normalBorderWidth > 0 ? Style.normalBorderWidth : 1
-  border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.45)
+  border.width: 1
+  border.color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.12)
 
-  // Top highlight line
-  Rectangle {
-    anchors.top: parent.top
-    anchors.left: parent.left
-    anchors.right: parent.right
-    anchors.margins: 1
-    height: 1
-    radius: parent.radius
-    color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.25)
+  // =========================================================================
+  // 2. Pure Functions & Helpers
+  // =========================================================================
+  function formatTaskMetadata(task) {
+    if (!task) return ""
+    var parts = []
+    if (task.priority) parts.push("Priority: " + task.priority)
+    if (task.due_date) parts.push("📅 " + task.due_date)
+    if (task.note_title && root.selectedCategory === root.allCategory) parts.push(task.note_title)
+    return parts.join(" · ")
   }
 
-  component Caption: Text {
-    textFormat: Text.PlainText
-    color: Color.foreground
-    font.family: root.typography.family
-    font.pixelSize: root.typography.body
-    wrapMode: Text.WordWrap
-  }
-
-  component Action: Ui.Button {
-    focusable: true
-    bordered: true
-    Accessible.role: Accessible.Button
-    Accessible.name: text
-    Accessible.onPressAction: clicked()
-  }
-
-  component Choice: Ui.Toggle {
-    Accessible.role: Accessible.CheckBox
-    Accessible.name: label
-    Accessible.checkable: true
-    Accessible.checked: checked
-    Accessible.onToggleAction: clicked()
-    opacity: enabled ? 1 : 0.5
+  function filterTasks() {
+    if (selectedCategory === allCategory) return tasksList
+    return tasksList.filter(t => t.category === selectedCategory)
   }
 
   function refresh() {
     if (fetchProc.running) return
     loading = true
     var args = [binPath, "tasks", "--json", "--all"]
-    if (selectedCategory !== "Alle") {
-      args.push("-c")
-      args.push(selectedCategory)
+    if (selectedCategory !== allCategory) {
+      args.push("-c", selectedCategory)
     }
     fetchProc.command = args
     fetchProc.running = true
@@ -81,21 +68,27 @@ Rectangle {
   }
 
   function addTask(text) {
-    if (!text || text.trim() === "" || addProc.running) return
-    var args = [binPath, "add", text.trim()]
-    if (selectedCategory !== "Alle") {
-      args.push("-c")
-      args.push(selectedCategory)
+    var trimmed = (text || "").trim()
+    if (!trimmed || addProc.running) return
+    var args = [binPath, "add", trimmed]
+    if (selectedCategory !== allCategory) {
+      args.push("-c", selectedCategory)
     }
     addProc.command = args
     addProc.running = true
   }
 
-  function filterTasks() {
-    if (selectedCategory === "Alle") return tasksList
-    return tasksList.filter(t => t.category === selectedCategory)
+  function addCategory(name) {
+    var trimmed = (name || "").trim()
+    if (!trimmed || addCategoryProc.running) return
+    root.selectedCategory = trimmed
+    addCategoryProc.command = [binPath, "categories", "--add", trimmed, "--json"]
+    addCategoryProc.running = true
   }
 
+  // =========================================================================
+  // 3. Backend Process Handlers & Lifecycle
+  // =========================================================================
   Component.onCompleted: refresh()
 
   Timer {
@@ -117,8 +110,9 @@ Rectangle {
         if (raw.length > 0) {
           try {
             var data = JSON.parse(raw)
-            root.tasksList = data.tasks || []
-            root.categoriesList = data.categories || ["Alle"]
+            if (JSON.stringify(root.tasksList) !== JSON.stringify(data.tasks || []))
+              root.tasksList = data.tasks || []
+            root.categoriesList = data.categories || [root.allCategory]
             var count = 0
             for (var i = 0; i < root.tasksList.length; i++) {
               if (!root.tasksList[i].completed) count++
@@ -132,72 +126,179 @@ Rectangle {
     }
   }
 
-  Process { id: toggleProc; onExited: function(c) { root.refresh() } }
   Process {
-    id: addProc
+    id: toggleProc
+    stderr: StdioCollector { id: toggleError }
     onExited: function(c) {
-      taskInputField.text = ""
+      root.errorText = c === 0 ? "" : (toggleError.text.trim() || "Could not update task.")
       root.refresh()
     }
   }
 
+  Process {
+    id: addProc
+    stderr: StdioCollector { id: addError }
+    onExited: function(c) {
+      if (c === 0) taskInputField.text = ""
+      root.errorText = c === 0 ? "" : (addError.text.trim() || "Could not save task.")
+      root.refresh()
+    }
+  }
+
+  Process {
+    id: addCategoryProc
+    stderr: StdioCollector { id: addCategoryError }
+    onExited: function(c) {
+      if (c === 0) {
+        newCategoryField.text = ""
+        root.addingCategory = false
+      } else {
+        root.selectedCategory = root.allCategory
+      }
+      root.errorText = c === 0 ? "" : (addCategoryError.text.trim() || "Could not add category.")
+      root.refresh()
+    }
+  }
+
+  // =========================================================================
+  // 4. UI Layout
+  // =========================================================================
   ColumnLayout {
     anchors.fill: parent
-    anchors.margins: Style.space(16)
-    spacing: Style.space(10)
+    anchors.margins: Style.space(10)
+    spacing: Style.space(6)
 
-    // Header
+    // Compact header
     RowLayout {
       Layout.fillWidth: true
-      ColumnLayout {
-        Layout.fillWidth: true
-        spacing: 2
-        Caption {
-          text: "OmaCheck"
-          font.bold: true
-          font.pixelSize: Style.font.heading
-        }
-        Caption {
-          text: root.openCount + " Aufgaben offen"
-          opacity: 0.7
-          font.pixelSize: Style.font.caption
-        }
+      spacing: Style.space(6)
+
+      Text {
+        text: "OmaCheck"
+        font.family: root.typography.family
+        font.pixelSize: Style.font.subtitle
+        font.bold: true
+        color: Color.foreground
       }
-      Action {
-        text: "⟳"
+
+      Text {
+        text: root.openCount > 0 ? "(" + root.openCount + ")" : ""
+        font.family: root.typography.family
+        font.pixelSize: Style.font.caption
+        color: Color.muted
+        visible: root.openCount > 0
+      }
+
+      Item { Layout.fillWidth: true }
+
+      Ui.Button {
+        id: refreshBtn
+        focusable: true
+        implicitWidth: Style.space(22)
+        implicitHeight: Style.space(22)
+        horizontalPadding: 0
+        verticalPadding: 0
+        iconText: "⟳"
+        iconSize: Style.font.caption
+        iconSpinning: root.loading
+        tooltipText: "Refresh"
+        Accessible.name: "Refresh"
         onClicked: root.refresh()
       }
     }
 
-    // Kategorie-Tabs im Omasync Action-Stil
-    Controls.ScrollView {
+    // Category filter bar with inline '+' button
+    RowLayout {
       Layout.fillWidth: true
-      implicitHeight: Style.space(38)
-      contentHeight: catRow.height
-      contentWidth: catRow.width
-      clip: true
-      Controls.ScrollBar.horizontal.policy: Controls.ScrollBar.AlwaysOff
+      spacing: Style.space(4)
 
-      Row {
-        id: catRow
-        spacing: Style.space(6)
+      Controls.ScrollView {
+        Layout.fillWidth: true
+        implicitHeight: Style.space(24)
+        contentHeight: catRow.height
+        contentWidth: catRow.width
+        clip: true
+        Controls.ScrollBar.horizontal.policy: Controls.ScrollBar.AlwaysOff
 
-        Repeater {
-          model: root.categoriesList
-          delegate: Action {
-            required property string modelData
-            text: modelData
-            selected: root.selectedCategory === modelData
-            onClicked: {
-              root.selectedCategory = modelData
-              root.refresh()
+        Row {
+          id: catRow
+          spacing: Style.space(4)
+
+          Repeater {
+            model: root.categoriesList
+            delegate: Ui.Button {
+              required property string modelData
+              text: modelData
+              selected: root.selectedCategory === modelData
+              horizontalPadding: Style.space(6)
+              verticalPadding: Style.space(3)
+              fontSize: Style.font.caption
+              focusable: true
+              Accessible.role: Accessible.Button
+              Accessible.name: text
+              Accessible.onPressAction: clicked()
+              onClicked: {
+                root.selectedCategory = modelData
+                root.refresh()
+              }
             }
+          }
+        }
+      }
+
+      Ui.Button {
+        id: addCategoryToggleBtn
+        focusable: true
+        implicitWidth: Style.space(22)
+        implicitHeight: Style.space(22)
+        horizontalPadding: 0
+        verticalPadding: 0
+        text: "+"
+        fontSize: Style.font.caption
+        tooltipText: "Add category"
+        Accessible.name: "Add category"
+        selected: root.addingCategory
+        onClicked: {
+          root.addingCategory = !root.addingCategory
+          if (root.addingCategory) {
+            Qt.callLater(function() { newCategoryField.forceActiveFocus() })
           }
         }
       }
     }
 
-    // Aufgabenliste mit nativem Omasync Choice-Toggle
+    // Inline new-category input row (visible when toggled)
+    RowLayout {
+      Layout.fillWidth: true
+      visible: root.addingCategory
+      spacing: Style.space(6)
+
+      Ui.TextField {
+        id: newCategoryField
+        Layout.fillWidth: true
+        placeholderText: "New category..."
+        Accessible.name: "New category name"
+        onAccepted: root.addCategory(newCategoryField.text)
+        Keys.onEscapePressed: {
+          root.addingCategory = false
+          newCategoryField.text = ""
+        }
+      }
+
+      Ui.Button {
+        focusable: true
+        implicitWidth: Style.space(24)
+        implicitHeight: Style.space(24)
+        horizontalPadding: 0
+        verticalPadding: 0
+        text: "+"
+        tooltipText: "Create category"
+        Accessible.name: "Create category"
+        onClicked: root.addCategory(newCategoryField.text)
+      }
+    }
+
+    // Task list with real checkboxes on the left
     Controls.ScrollView {
       id: taskScroll
       Layout.fillWidth: true
@@ -208,53 +309,161 @@ Rectangle {
 
       Column {
         width: taskScroll.availableWidth
-        spacing: Style.space(4)
+        spacing: Style.space(2)
 
         Repeater {
           model: root.filterTasks()
-          delegate: Choice {
-            id: taskChoice
+          delegate: Controls.CheckBox {
+            id: taskCheck
             required property var modelData
             width: parent.width
-            label: taskChoice.modelData.text
-            description: {
-              var desc = []
-              if (taskChoice.modelData.priority) desc.push("Prio: " + taskChoice.modelData.priority)
-              if (taskChoice.modelData.due_date) desc.push("📅 " + taskChoice.modelData.due_date)
-              if (taskChoice.modelData.note_title) desc.push(taskChoice.modelData.note_title)
-              return desc.join(" · ")
+
+            checked: Boolean(taskCheck.modelData && taskCheck.modelData.completed)
+            nextCheckState: function() { return checkState }
+            hoverEnabled: true
+            activeFocusOnTab: true
+
+            spacing: Style.space(8)
+            leftPadding: Style.space(6)
+            rightPadding: Style.space(6)
+            topPadding: Style.space(3)
+            bottomPadding: Style.space(3)
+
+            Accessible.role: Accessible.CheckBox
+            Accessible.name: taskCheck.modelData.text
+            Accessible.checked: taskCheck.checked
+            Accessible.onToggleAction: root.toggleTask(taskCheck.modelData.id)
+
+            onClicked: root.toggleTask(taskCheck.modelData.id)
+
+            indicator: Rectangle {
+              id: ind
+              implicitWidth: Style.space(16)
+              implicitHeight: Style.space(16)
+              width: implicitWidth
+              height: implicitHeight
+              x: taskCheck.leftPadding
+              y: taskCheck.topPadding + Math.max(0, Math.round((taskTitle.font.pixelSize * 1.3 - height) / 2))
+              radius: Math.max(2, Math.round(Style.cornerRadius / 4))
+
+              color: taskCheck.checked
+                ? Style.selectedFillFor(Color.foreground, Color.accent)
+                : (taskCheck.down ? Style.pressedFillFor(Color.foreground, Color.accent) : "transparent")
+
+              border.width: 1
+              border.color: taskCheck.checked
+                ? Color.accent
+                : (taskCheck.hovered || taskCheck.activeFocus ? Color.accent : Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.35))
+
+              Text {
+                anchors.centerIn: parent
+                visible: taskCheck.checked
+                text: "✓"
+                color: Color.accent
+                font.family: root.typography.family
+                font.pixelSize: Math.round(ind.height * 0.85)
+                font.bold: true
+              }
             }
-            checked: taskChoice.modelData.completed
-            onClicked: root.toggleTask(taskChoice.modelData.id)
+
+            contentItem: Controls.Control {
+              leftPadding: taskCheck.indicator.width + taskCheck.spacing
+              topPadding: 0
+              bottomPadding: 0
+              rightPadding: 0
+              implicitHeight: taskCol.implicitHeight
+
+              contentItem: Column {
+                id: taskCol
+                spacing: Style.spacing.xxs
+
+                Text {
+                  id: taskTitle
+                  textFormat: Text.PlainText
+                  width: taskCheck.availableWidth - taskCheck.indicator.width - taskCheck.spacing
+                  text: taskCheck.modelData.text
+                  font.family: root.typography.family
+                  font.pixelSize: Style.font.body
+                  color: taskCheck.checked ? Color.muted : Color.foreground
+                  font.strikeout: taskCheck.checked
+                  wrapMode: Text.Wrap
+                }
+
+                Text {
+                  id: taskMeta
+                  textFormat: Text.PlainText
+                  readonly property string metaString: root.formatTaskMetadata(taskCheck.modelData)
+                  visible: metaString.length > 0
+                  text: metaString
+                  font.family: root.typography.family
+                  font.pixelSize: Style.font.caption
+                  color: Color.muted
+                  elide: Text.ElideRight
+                  width: taskTitle.width
+                }
+              }
+            }
+
+            background: Rectangle {
+              radius: Math.max(2, Math.round(Style.cornerRadius / 2))
+              color: taskCheck.down
+                ? Style.pressedFillFor(Color.foreground, Color.accent)
+                : (taskCheck.hovered || taskCheck.activeFocus
+                    ? Style.hoverFillFor(Color.foreground, Color.accent)
+                    : "transparent")
+              border.width: taskCheck.activeFocus ? 1 : 0
+              border.color: taskCheck.activeFocus ? Style.focusBorderColor : "transparent"
+            }
           }
         }
 
-        Caption {
+        Text {
           visible: root.filterTasks().length === 0
-          text: "Keine Aufgaben vorhanden."
-          opacity: 0.5
+          text: "No tasks yet."
+          font.family: root.typography.family
+          font.pixelSize: Style.font.caption
+          color: Color.muted
           anchors.horizontalCenter: parent.horizontalCenter
           y: Style.space(20)
         }
       }
     }
 
-    // Quick-Add Zeile im Omasync TextField + Action Stil
+    // Error message display
+    Text {
+      Layout.fillWidth: true
+      visible: root.errorText !== ""
+      text: root.errorText
+      textFormat: Text.PlainText
+      color: Color.urgent
+      font.family: root.typography.family
+      font.pixelSize: Style.font.caption
+      wrapMode: Text.Wrap
+    }
+
+    // Quick-add row
     RowLayout {
       Layout.fillWidth: true
       spacing: Style.space(6)
 
       Ui.TextField {
         id: taskInputField
+        enabled: !addProc.running
         Layout.fillWidth: true
-        placeholderText: "+ Neue Aufgabe für '" + root.selectedCategory + "'..."
-        Accessible.name: "Aufgabe eingeben"
+        placeholderText: root.selectedCategory === root.allCategory ? "+ New task..." : "+ New task in '" + root.selectedCategory + "'..."
+        Accessible.name: "Enter task"
         onAccepted: root.addTask(taskInputField.text)
       }
 
-      Action {
+      Ui.Button {
+        focusable: true
+        enabled: !addProc.running
+        implicitWidth: Style.space(28)
+        implicitHeight: Style.space(28)
+        horizontalPadding: 0
+        verticalPadding: 0
         text: "+"
-        Accessible.name: "Aufgabe anlegen"
+        Accessible.name: "Add task"
         onClicked: root.addTask(taskInputField.text)
       }
     }

@@ -11,17 +11,14 @@ BarWidget {
   readonly property string binPath: Quickshell.env("HOME") + "/.local/bin/omacheck"
 
   property int openTasksCount: 0
-  property int totalTasksCount: 0
   property var tasksList: []
-  property var categoriesList: ["Alle"]
-  property string selectedCategory: "Alle"
   property bool isLoading: false
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
   readonly property string displayText: openTasksCount > 0 ? "✓ " + openTasksCount : "✓"
-  readonly property string currentTooltip: "OmaCheck: " + openTasksCount + " offene Aufgaben\nLinksklick: OmaCheck App öffnen\nRechtsklick: Aktualisieren"
+  readonly property string currentTooltip: "OmaCheck: " + openTasksCount + " open tasks\nLeft click: open/close the OmaCheck app\nRight click: refresh"
 
   function refresh() {
     if (fetchProc.running) return
@@ -31,11 +28,11 @@ BarWidget {
     fetchProc.running = true
   }
 
+  // The app is a panel-kind entry point of this same plugin, loaded
+  // in-process by the shell — toggled the same way omarchy.menu opens
+  // its own panel from its bar widget (root.bar.run(), not a subprocess).
   function openApp() {
-    if (!launchProc.running) {
-      launchProc.command = [binPath, "gui"]
-      launchProc.running = true
-    }
+    if (root.bar) root.bar.run("omarchy-shell shell toggle carsten.omacheck '{}'")
   }
 
   Timer {
@@ -59,13 +56,11 @@ BarWidget {
           try {
             var data = JSON.parse(raw)
             root.tasksList = data.tasks || []
-            root.categoriesList = data.categories || ["Alle"]
             var openCount = 0
             for (var i = 0; i < root.tasksList.length; i++) {
               if (!root.tasksList[i].completed) openCount++
             }
             root.openTasksCount = openCount
-            root.totalTasksCount = root.tasksList.length
           } catch (e) {
             console.warn("OmaCheck JSON parse error:", e)
           }
@@ -74,16 +69,14 @@ BarWidget {
     }
   }
 
-  Process {
-    id: launchProc
-  }
-
+  // Opening/closing the app is already covered by the shell's generic
+  // panel IPC (`omarchy-shell shell summon/hide/toggle carsten.omacheck`,
+  // same as any other panel plugin); this target only adds what that
+  // doesn't cover.
   IpcHandler {
     target: "carsten.omacheck"
 
     function refresh(): void { root.refresh() }
-    function open(): void { root.openApp() }
-    function toggle(): void { root.openApp() }
   }
 
   WidgetButton {

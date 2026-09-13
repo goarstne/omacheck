@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=OmaCheck
-Comment=Universelle Notizen- & To-Do-App für Omarchy Linux
+Comment=Universal notes & to-do app for Omarchy Linux
 Exec=/home/carsten/.local/bin/omacheck gui
 Icon=checkbox-checked-symbolic
 Terminal=false
