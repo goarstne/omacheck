@@ -6,24 +6,17 @@ Built on the **Ponytail principle** (*lazy senior dev: "The best code is the cod
 plain Markdown as the single source of truth, no external database, no custom sync daemon, full use of the Omarchy Linux ecosystem (Hyprland + Quickshell), with optional Obsidian vault compatibility.
 
 <p align="center">
-  <img src="screenshots/app-tasks.png" alt="OmaCheck app window with categories, search, and checkboxes" width="100%">
+  <img src="screenshots/desktop-widget.png" alt="OmaCheck permanent desktop widget with categories and checkboxes" width="320">
+  <br>
+  <em>The permanent desktop widget — always on the wallpaper, 100% theme-aware.</em>
 </p>
 
 ---
 
 ## 🎨 Theme-aware & 📓 Obsidian-optional
 
-- **100% theme-aware:** every surface — desktop widget, bar widget, and app — reads the active Omarchy theme (`qs.Commons.Color` / `colors.toml`) live. Switch your Omarchy theme and OmaCheck follows, no restart:
-
-  <p align="center">
-    <img src="screenshots/theme-comparison.png" alt="Same OmaCheck view under two different Omarchy themes" width="100%">
-  </p>
-
+- **100% theme-aware:** the desktop widget, bar widget, and app all read the active Omarchy theme (`qs.Commons.Color` / `colors.toml`) live — switch your Omarchy theme and OmaCheck follows, no restart.
 - **Storage: standalone by default, Obsidian optional.** Notes are plain Markdown under `~/Documents/OmaCheck` out of the box — no other app required. Flip a switch in Settings to store them in a `Notes/` subfolder of your currently open Obsidian vault instead; OmaCheck auto-detects it from `~/.config/obsidian/obsidian.json`. Every note exists 1:1 in Obsidian either way.
-
-  <p align="center">
-    <img src="screenshots/settings-obsidian.png" alt="OmaCheck Settings panel with the Obsidian vault storage option" width="100%">
-  </p>
 
 ---
 
@@ -43,6 +36,10 @@ plain Markdown as the single source of truth, no external database, no custom sy
    - Tasks use real checkboxes to the left of the text.
    - **Settings** lets you toggle the bar widget, the desktop widget, and the storage mode (standalone vs. Obsidian).
    - Reachable from the terminal (`omacheck gui`), by clicking the bar widget, or via the Omarchy app menu (`omacheck.desktop`) — each just runs `omarchy-shell shell toggle carsten.omacheck`.
+
+   <p align="center">
+     <img src="screenshots/app-tasks.png" alt="OmaCheck app window with categories, search, and checkboxes" width="100%">
+   </p>
 
 3. **Bar widget:**
    - Off by default; enable it from **Settings → Show bar widget** in the app.
