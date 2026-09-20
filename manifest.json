@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "carsten.omacheck",
   "name": "OmaCheck",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Carsten",
   "license": "MIT",
   "description": "Universal notes & to-do app with a permanent desktop widget, a bar widget, and optional Obsidian support.",

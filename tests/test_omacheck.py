@@ -141,6 +141,36 @@ class TestOmaCheckCategoriesAndNotes(unittest.TestCase):
         ok2, _ = create_note(self.test_dir, "Neues Projekt", category="Dev")
         self.assertFalse(ok2)
 
+    def test_create_note_rejects_path_traversal_via_category(self):
+        # A category such as "../../.config/hypr" (e.g. from a note's own
+        # frontmatter reused for a later Create Note action) must never let
+        # the write escape the resolved notes directory.
+        outside_marker = self.test_dir.parent / "should_not_exist_omacheck.md"
+        self.addCleanup(lambda: outside_marker.unlink(missing_ok=True))
+
+        ok, msg = create_note(self.test_dir, "should_not_exist_omacheck", category="../../.config/hypr")
+        self.assertFalse(ok)
+        self.assertFalse(outside_marker.exists())
+
+    def test_create_note_rejects_dotdot_category(self):
+        ok, msg = create_note(self.test_dir, "Note", category="..")
+        self.assertFalse(ok)
+
+    def test_scan_notes_ignores_symlinked_md_file(self):
+        # A symlinked .md file inside notes_dir pointing outside it must be
+        # invisible to scan_notes, so toggle/delete (which act on
+        # Note.file_path) can never be pointed at it.
+        outside_dir = Path(tempfile.mkdtemp(prefix="omacheck_outside_"))
+        self.addCleanup(shutil.rmtree, outside_dir, ignore_errors=True)
+        outside_file = outside_dir / "Secret.md"
+        outside_file.write_text("# Secret\n- [ ] outside task\n", encoding="utf-8")
+
+        link = self.test_dir / "Linked.md"
+        link.symlink_to(outside_file)
+
+        notes = scan_notes(self.test_dir)
+        self.assertEqual(notes, [])
+
 
 class TestOmaCheckAtomicToggleAndAdd(unittest.TestCase):
     def setUp(self):
@@ -217,6 +247,34 @@ class TestOmaCheckAtomicToggleAndAdd(unittest.TestCase):
             content = f.read()
 
         self.assertIn("Neuer dringender Task #omarchy ⏫ 📅 2026-09-20", content)
+
+    def test_add_task_rejects_path_traversal_via_category(self):
+        outside_marker = self.test_dir.parent / "should_not_exist_omacheck.md"
+        self.addCleanup(lambda: outside_marker.unlink(missing_ok=True))
+
+        ok, msg = add_task(
+            notes_dir=self.test_dir,
+            text="pwned",
+            note_title="should_not_exist_omacheck",
+            category="../../.config/hypr",
+        )
+        self.assertFalse(ok)
+        self.assertFalse(outside_marker.exists())
+
+    def test_add_task_rejects_path_traversal_via_note_title(self):
+        outside_marker = self.test_dir.parent / "should_not_exist_omacheck.md"
+        self.addCleanup(lambda: outside_marker.unlink(missing_ok=True))
+
+        # Slashes are stripped from the note title, so the write can never
+        # land outside notes_dir — regardless of whether the resulting
+        # (locally named) file is otherwise accepted.
+        add_task(
+            notes_dir=self.test_dir,
+            text="pwned",
+            note_title="../../should_not_exist_omacheck",
+            category="General",
+        )
+        self.assertFalse(outside_marker.exists())
 
 
 class TestOmaCheckConfigDefaults(unittest.TestCase):

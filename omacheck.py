@@ -313,16 +313,62 @@ def parse_task_line(
     )
 
 
+def _is_safe_path_component(name: str) -> bool:
+    """True if `name` is safe to use as a single path segment (a category or
+    note-title folder/file name): non-empty, no separators or absolute-path
+    markers, not `.`/`..`, and no NUL/control characters. This blocks
+    traversal attempts (e.g. a category of "../../.config") coming from CLI
+    args, config, or note frontmatter."""
+    if not name or name in (".", ".."):
+        return False
+    if "/" in name or "\\" in name or os.sep in name:
+        return False
+    if any(ord(c) < 32 or ord(c) == 127 for c in name):
+        return False
+    return True
+
+
+def _resolve_note_target(notes_dir: Path, category: str, filename: str) -> Optional[Path]:
+    """Builds <notes_dir>/[category/]filename for a note write, rejecting an
+    unsafe category or filename component and verifying the resolved result
+    — including via a symlinked category directory — stays beneath the
+    resolved notes directory."""
+    if not _is_safe_path_component(filename):
+        return None
+    if category != DEFAULT_CATEGORY and not _is_safe_path_component(category):
+        return None
+
+    base = notes_dir.resolve()
+    target_dir = base if category == DEFAULT_CATEGORY else base / category
+    target = (target_dir / filename).resolve()
+
+    if target != base and base not in target.parents:
+        return None
+    return target
+
+
 def scan_notes(notes_dir: Path, default_category: str = DEFAULT_CATEGORY) -> List[Note]:
     """Recursively scans the notes directory for .md files."""
     notes: List[Note] = []
     if not notes_dir.is_dir():
         return notes
 
+    notes_dir_resolved = notes_dir.resolve()
+
     # Sorted list of all .md files
     for md_file in sorted(notes_dir.rglob("*.md")):
         if md_file.name.startswith("."):
             continue
+
+        # Reject a symlinked note, or one reached through a symlinked
+        # category folder: toggle/delete write straight to Note.file_path,
+        # so a link pointing outside notes_dir must never enter that list.
+        if md_file.is_symlink():
+            continue
+        resolved_file = md_file.resolve()
+        if resolved_file != notes_dir_resolved and notes_dir_resolved not in resolved_file.parents:
+            continue
+        md_file = resolved_file
 
         try:
             with open(md_file, "r", encoding="utf-8", errors="replace") as f:
@@ -332,7 +378,7 @@ def scan_notes(notes_dir: Path, default_category: str = DEFAULT_CATEGORY) -> Lis
 
         # Determine category:
         # 1. Subfolder relative to notes_dir?
-        rel_parent = md_file.parent.relative_to(notes_dir)
+        rel_parent = md_file.parent.relative_to(notes_dir_resolved)
         category = default_category
         if str(rel_parent) != ".":
             category = rel_parent.parts[0]
@@ -474,11 +520,14 @@ def add_task(
 ) -> Tuple[bool, str]:
     """Adds a new checkbox task to a note."""
     target_note_title = note_title.strip() if note_title else "Tasks"
+    target_note_title = re.sub(r'[\\/*?:"<>|]', "", target_note_title).strip()
+    if not target_note_title:
+        return False, "Invalid note title"
 
-    # Category directory
-    cat_dir = notes_dir if category == DEFAULT_CATEGORY else notes_dir / category
-    cat_dir.mkdir(parents=True, exist_ok=True)
-    target_file = cat_dir / f"{target_note_title}.md"
+    target_file = _resolve_note_target(notes_dir, category, f"{target_note_title}.md")
+    if target_file is None:
+        return False, f"Invalid category or note title: '{category}' / '{target_note_title}'"
+    target_file.parent.mkdir(parents=True, exist_ok=True)
 
     # Format the task line
     tokens = [text.strip()]
@@ -546,9 +595,10 @@ def create_note(
     if not clean_title:
         return False, "Invalid note title"
 
-    cat_dir = notes_dir if category == DEFAULT_CATEGORY else notes_dir / category
-    cat_dir.mkdir(parents=True, exist_ok=True)
-    target_file = cat_dir / f"{clean_title}.md"
+    target_file = _resolve_note_target(notes_dir, category, f"{clean_title}.md")
+    if target_file is None:
+        return False, f"Invalid category or note title: '{category}' / '{clean_title}'"
+    target_file.parent.mkdir(parents=True, exist_ok=True)
 
     if target_file.exists():
         return False, f"Note '{clean_title}' already exists in '{category}'"
